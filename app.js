@@ -2,6 +2,7 @@
 let currentPage = 'home';
 let isLoginMode = true;
 let currentProduct = null;
+const API_BASE = 'https://vexusapps.shop/api'; // Será substituído pelo domínio real
 
 // Inicializar aplicação
 document.addEventListener('DOMContentLoaded', () => {
@@ -73,34 +74,56 @@ function renderProductDetail() {
 }
 
 // Ir para checkout
-function goToCheckout() {
+async function goToCheckout() {
     if (!currentProduct) return;
     
-    document.getElementById('checkoutProduct').textContent = currentProduct.name;
-    document.getElementById('checkoutPrice').textContent = `R$ ${currentProduct.price.toFixed(2)}`;
-    
-    // Gerar código Pix simulado
-    const pixCode = generatePixCode(currentProduct.price);
-    document.getElementById('pixCode').value = pixCode;
-    
-    // Gerar QR code simulado
-    generateQRCode(pixCode);
-    
-    showPage('checkout');
-}
+    const user = getCurrentUser();
+    if (!user) {
+        alert('Faça login primeiro');
+        return;
+    }
 
-// Gerar código Pix
-function generatePixCode(amount) {
-    // Simulação de código Pix (em produção, seria gerado pela API Bitso)
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(7);
-    return `00020126580014br.gov.bcb.pix0136${random}-${random}-${random}-${random}-${random}5204000053039865802BR5913VEXUS APPS6009SAO PAULO62410503***63047D3D`;
+    try {
+        // Criar pagamento via API
+        const response = await fetch(`${API_BASE}/payment/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount: currentProduct.price,
+                email: user.email,
+                productId: currentProduct.id,
+                productName: currentProduct.name
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Erro ao criar pagamento');
+        }
+
+        const data = await response.json();
+        
+        // Salvar ID da compra
+        localStorage.setItem('current_purchase_id', data.purchaseId);
+
+        document.getElementById('checkoutProduct').textContent = currentProduct.name;
+        document.getElementById('checkoutPrice').textContent = `R$ ${currentProduct.price.toFixed(2)}`;
+        document.getElementById('pixCode').value = data.pixCode;
+
+        // Gerar QR Code
+        if (data.qrCode) {
+            generateQRCode(data.pixCode);
+        }
+
+        showPage('checkout');
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao criar pagamento: ' + error.message);
+    }
 }
 
 // Gerar QR Code
 function generateQRCode(pixCode) {
     const qrContainer = document.getElementById('qrCode');
-    // Usar API QR Code gratuita
     const encodedCode = encodeURIComponent(pixCode);
     qrContainer.innerHTML = `
         <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodedCode}" alt="QR Code Pix" style="width: 200px; height: 200px; border-radius: 0.5rem;">
@@ -116,70 +139,88 @@ function copyPixCode() {
 }
 
 // Confirmar pagamento
-function confirmPayment() {
-    if (!currentProduct) return;
-    
-    const user = getCurrentUser();
-    if (!user) return;
-    
-    // Criar compra
-    const purchase = {
-        id: Date.now(),
-        userId: user.id,
-        productId: currentProduct.id,
-        productName: currentProduct.name,
-        price: currentProduct.price,
-        date: new Date().toLocaleString('pt-BR'),
-        status: 'active',
-        activatedAt: null,
-        botToken: null
-    };
-    
-    const purchases = getPurchases();
-    purchases.push(purchase);
-    savePurchases(purchases);
-    
-    // Simular webhook Discord
-    sendDiscordNotification(`Nova compra: ${user.email} comprou ${currentProduct.name} por R$ ${currentProduct.price.toFixed(2)}`);
-    
-    alert('Pagamento confirmado! Você pode ativar seu bot agora.');
-    showPage('purchases');
-}
+async function confirmPayment() {
+    const purchaseId = localStorage.getItem('current_purchase_id');
+    if (!purchaseId) {
+        alert('Erro: ID da compra não encontrado');
+        return;
+    }
 
-// Enviar notificação Discord
-function sendDiscordNotification(message) {
-    // Em produção, isso seria feito via API
-    console.log('Notificação Discord:', message);
+    try {
+        // Verificar pagamento
+        const response = await fetch(`${API_BASE}/payment/check`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ purchaseId })
+        });
+
+        if (!response.ok) {
+            throw new Error('Erro ao verificar pagamento');
+        }
+
+        const data = await response.json();
+
+        if (data.status === 'paid') {
+            alert('Pagamento confirmado! Você pode ativar seu bot agora.');
+            localStorage.removeItem('current_purchase_id');
+            showPage('purchases');
+        } else {
+            alert('Pagamento ainda não confirmado. Aguarde alguns instantes...');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao confirmar pagamento: ' + error.message);
+    }
 }
 
 // Renderizar compras
-function renderPurchases() {
+async function renderPurchases() {
     const user = getCurrentUser();
     if (!user) {
         document.getElementById('purchasesList').innerHTML = '<p>Faça login para ver suas compras</p>';
         return;
     }
-    
-    const purchases = getPurchases().filter(p => p.userId === user.id);
-    
-    if (purchases.length === 0) {
-        document.getElementById('purchasesList').innerHTML = '<p>Você ainda não comprou nenhum bot</p>';
-        return;
-    }
-    
-    document.getElementById('purchasesList').innerHTML = purchases.map(purchase => `
-        <div class="purchase-card">
-            <h3>${purchase.productName}</h3>
-            <span class="purchase-status ${purchase.status}">${purchase.status === 'active' ? 'Ativo' : 'Aguardando'}</span>
-            <div class="purchase-info">
-                <p>Comprado em: ${purchase.date}</p>
-                <p>Valor: R$ ${purchase.price.toFixed(2)}</p>
+
+    try {
+        const response = await fetch(`${API_BASE}/purchases?email=${encodeURIComponent(user.email)}`);
+        if (!response.ok) {
+            throw new Error('Erro ao obter compras');
+        }
+
+        const data = await response.json();
+        const purchases = data.purchases || [];
+
+        if (purchases.length === 0) {
+            document.getElementById('purchasesList').innerHTML = '<p>Você ainda não comprou nenhum bot</p>';
+            return;
+        }
+
+        document.getElementById('purchasesList').innerHTML = purchases.map(purchase => `
+            <div class="purchase-card">
+                <h3>${purchase.productName}</h3>
+                <span class="purchase-status ${purchase.status}">${getStatusLabel(purchase.status)}</span>
+                <div class="purchase-info">
+                    <p>Comprado em: ${new Date(purchase.createdAt).toLocaleString('pt-BR')}</p>
+                    <p>Valor: R$ ${purchase.amount.toFixed(2)}</p>
+                </div>
+                <button class="activate-btn" onclick="goToActivation('${purchase.id}')" ${purchase.activatedAt ? 'disabled' : ''}>
+                    ${purchase.activatedAt ? 'Já Ativado' : 'Ativar Bot'}
+                </button>
             </div>
-            <button class="activate-btn" onclick="goToActivation(${purchase.id})" ${purchase.activatedAt ? 'disabled' : ''}>
-                ${purchase.activatedAt ? 'Já Ativado' : 'Ativar Bot'}
-            </button>
-        </div>
-    `).join('');
+        `).join('');
+    } catch (error) {
+        console.error('Erro:', error);
+        document.getElementById('purchasesList').innerHTML = '<p>Erro ao carregar compras</p>';
+    }
+}
+
+function getStatusLabel(status) {
+    const labels = {
+        'pending': 'Aguardando Pagamento',
+        'paid': 'Pago',
+        'activated': 'Ativado'
+    };
+    return labels[status] || status;
 }
 
 // Ir para ativação
@@ -189,34 +230,40 @@ function goToActivation(purchaseId) {
 }
 
 // Lidar com ativação
-function handleActivation(event) {
+async function handleActivation(event) {
     event.preventDefault();
     
     const purchaseId = document.getElementById('activationProductId').value;
     const botToken = document.getElementById('botToken').value;
-    
+    const user = getCurrentUser();
+
     if (!botToken) {
         alert('Digite o token do bot');
         return;
     }
-    
-    // Atualizar compra
-    const purchases = getPurchases();
-    const purchase = purchases.find(p => p.id == purchaseId);
-    
-    if (purchase) {
-        purchase.activatedAt = new Date().toLocaleString('pt-BR');
-        purchase.botToken = botToken;
-        savePurchases(purchases);
-        
-        // Enviar webhook Discord
-        sendDiscordNotification(`Bot ativado: ${purchase.productName} - Token: ${botToken.substring(0, 10)}...`);
-        
-        // Bloquear por 24 horas
-        const blockUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        alert(`Bot ativado com sucesso! Você poderá ativar novamente em ${blockUntil.toLocaleString('pt-BR')}`);
-        
+
+    try {
+        const response = await fetch(`${API_BASE}/bot/activate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                purchaseId,
+                botToken,
+                email: user.email
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Erro ao ativar bot');
+        }
+
+        const data = await response.json();
+        alert(data.message);
         showPage('purchases');
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro: ' + error.message);
     }
 }
 
@@ -238,7 +285,7 @@ function handleAuth(event) {
         alert('Preencha todos os campos');
         return;
     }
-    
+
     const users = getUsers();
     
     if (isLoginMode) {
