@@ -2,6 +2,7 @@
 let currentPage = 'home';
 let isLoginMode = true;
 let currentProduct = null;
+let paymentCheckInterval = null;
 const API_BASE = 'https://vexusapps.shop/api'; // Será substituído pelo domínio real
 
 // Inicializar aplicação
@@ -12,6 +13,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Navegação entre páginas
 function showPage(page) {
+    // Limpar intervalo de verificação se sair do checkout
+    if (currentPage === 'checkout' && page !== 'checkout') {
+        clearInterval(paymentCheckInterval);
+    }
+
     // Ocultar todas as páginas
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     
@@ -115,10 +121,57 @@ async function goToCheckout() {
         }
 
         showPage('checkout');
+
+        // Iniciar verificação automática de pagamento
+        startPaymentCheck();
     } catch (error) {
         console.error('Erro:', error);
         alert('Erro ao criar pagamento: ' + error.message);
     }
+}
+
+// Iniciar verificação automática de pagamento
+function startPaymentCheck() {
+    // Verificar a cada 5 segundos
+    paymentCheckInterval = setInterval(async () => {
+        const purchaseId = localStorage.getItem('current_purchase_id');
+        if (!purchaseId) return;
+
+        try {
+            const response = await fetch(`${API_BASE}/payment/check`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ purchaseId })
+            });
+
+            if (!response.ok) return;
+
+            const data = await response.json();
+
+            if (data.status === 'paid') {
+                // Pagamento recebido!
+                clearInterval(paymentCheckInterval);
+                
+                const statusDiv = document.getElementById('paymentStatus');
+                statusDiv.innerHTML = `
+                    <div style="color: var(--success); font-size: 1.2rem; font-weight: bold;">
+                        ✓ Pagamento Confirmado!
+                    </div>
+                    <p style="color: var(--text-secondary); margin-top: 1rem;">
+                        Você pode ativar seu bot agora em "Meus Comprados"
+                    </p>
+                `;
+
+                // Redirecionar após 3 segundos
+                setTimeout(() => {
+                    localStorage.removeItem('current_purchase_id');
+                    showPage('purchases');
+                }, 3000);
+            }
+        } catch (error) {
+            console.error('Erro ao verificar pagamento:', error);
+        }
+    }, 5000);
 }
 
 // Gerar QR Code
@@ -136,41 +189,6 @@ function copyPixCode() {
     pixCode.select();
     document.execCommand('copy');
     alert('Código Pix copiado!');
-}
-
-// Confirmar pagamento
-async function confirmPayment() {
-    const purchaseId = localStorage.getItem('current_purchase_id');
-    if (!purchaseId) {
-        alert('Erro: ID da compra não encontrado');
-        return;
-    }
-
-    try {
-        // Verificar pagamento
-        const response = await fetch(`${API_BASE}/payment/check`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ purchaseId })
-        });
-
-        if (!response.ok) {
-            throw new Error('Erro ao verificar pagamento');
-        }
-
-        const data = await response.json();
-
-        if (data.status === 'paid') {
-            alert('Pagamento confirmado! Você pode ativar seu bot agora.');
-            localStorage.removeItem('current_purchase_id');
-            showPage('purchases');
-        } else {
-            alert('Pagamento ainda não confirmado. Aguarde alguns instantes...');
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro ao confirmar pagamento: ' + error.message);
-    }
 }
 
 // Renderizar compras

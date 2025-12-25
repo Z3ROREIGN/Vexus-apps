@@ -98,7 +98,12 @@
                             <h3>QR Code</h3>
                             <div id="qrCode"></div>
                         </div>
-                        <button onclick="confirmPayment()" class="confirm-btn">Confirmar Pagamento</button>
+                        <div id="paymentStatus" style="text-align: center; margin-top: 2rem;">
+                            <p style="color: var(--text-secondary);">Aguardando pagamento...</p>
+                            <div style="margin-top: 1rem;">
+                                <div style="display: inline-block; width: 20px; height: 20px; border: 3px solid var(--primary); border-radius: 50%; border-top-color: transparent; animation: spin 1s linear infinite;"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

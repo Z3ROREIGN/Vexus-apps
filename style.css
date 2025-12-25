@@ -566,6 +566,12 @@ body {
 }
 
 /* Responsive */
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 @media (max-width: 768px) {
     .hero h1 {
         font-size: 2rem;
