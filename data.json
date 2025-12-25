@@ -1,0 +1,52 @@
+{
+  "products": [
+    {
+      "id": 1,
+      "name": "Ticket",
+      "price": 4.00,
+      "icon": "👥",
+      "description": "Bot para gerenciamento de tickets de suporte. Automatize o atendimento ao cliente com sistema de tickets inteligente.",
+      "features": [
+        "Criação automática de tickets",
+        "Categorização de problemas",
+        "Atribuição de staff",
+        "Histórico de conversas",
+        "Notificações em tempo real"
+      ],
+      "pixCode": "00020126580014br.gov.bcb.pix0136xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx5204000053039865802BR5913VEXUS APPS6009SAO PAULO62410503***63047D3D"
+    },
+    {
+      "id": 2,
+      "name": "Vendas",
+      "price": 5.00,
+      "icon": "⚡",
+      "description": "Bot para automação de vendas e conversão. Aumente suas vendas com chatbot inteligente e integração de pagamentos.",
+      "features": [
+        "Chatbot de vendas",
+        "Integração de pagamentos",
+        "Cupons e promoções",
+        "Análise de conversão",
+        "Sugestões de produtos"
+      ],
+      "pixCode": "00020126580014br.gov.bcb.pix0136xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx5204000053039865802BR5913VEXUS APPS6009SAO PAULO62410503***63047D3D"
+    },
+    {
+      "id": 3,
+      "name": "Manager",
+      "price": 8.00,
+      "icon": "⚙️",
+      "description": "Bot para gerenciamento completo do servidor. Controle total com moderação, logs e automações avançadas.",
+      "features": [
+        "Moderação automática",
+        "Sistema de logs",
+        "Gerenciamento de roles",
+        "Automação de eventos",
+        "Análise de servidor"
+      ],
+      "pixCode": "00020126580014br.gov.bcb.pix0136xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx5204000053039865802BR5913VEXUS APPS6009SAO PAULO62410503***63047D3D"
+    }
+  ],
+  "users": [],
+  "purchases": [],
+  "activations": []
+}
