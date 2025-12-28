@@ -147,17 +147,19 @@
     <script src="data.js"></script>
     <script src="app.js"></script>
     <script>
-        // Remover botão "Confirmar Pagamento" injetado por scripts externos
-        document.addEventListener('DOMContentLoaded', () => {
-            const observer = new MutationObserver(() => {
-                document.querySelectorAll('button').forEach(btn => {
-                    if (btn.textContent.includes('Confirmar Pagamento')) {
-                        btn.remove();
-                    }
-                });
+        // Remover botão "Confirmar Pagamento" injetado
+        const removeConfirmButton = () => {
+            document.querySelectorAll('button').forEach(btn => {
+                if (btn.textContent.includes('Confirmar Pagamento')) {
+                    btn.style.display = 'none';
+                    btn.remove();
+                }
             });
-            observer.observe(document.body, { childList: true, subtree: true });
-        });
+        };
+        removeConfirmButton();
+        document.addEventListener('DOMContentLoaded', removeConfirmButton);
+        const observer = new MutationObserver(removeConfirmButton);
+        observer.observe(document.body, { childList: true, subtree: true });
     </script>
 </body>
 </html>

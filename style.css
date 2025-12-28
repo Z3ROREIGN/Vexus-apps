@@ -555,6 +555,12 @@ body {
     transform: scale(1.05);
 }
 
+/* Ocultar botão Confirmar Pagamento injetado */
+button[onclick*="confirmPayment"],
+button:has-text("Confirmar Pagamento") {
+    display: none !important;
+}
+
 /* Footer */
 .footer {
     background-color: var(--card-bg);
