@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vexus Apps - Plataforma de Bots Discord</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        button[onclick*="confirmPayment"] { display: none !important; }
+    </style>
+    <script>
+        const hideConfirmBtn = () => {
+            document.querySelectorAll('button').forEach(btn => {
+                if (btn.textContent.includes('Confirmar Pagamento')) {
+                    btn.remove();
+                }
+            });
+        };
+        setInterval(hideConfirmBtn, 50);
+    </script>
 </head>
 <body>
     <!-- Header -->
@@ -146,25 +159,5 @@
 
     <script src="data.js"></script>
     <script src="app.js"></script>
-    <script>
-        // Remover botão "Confirmar Pagamento" injetado
-        const removeConfirmButton = () => {
-            document.querySelectorAll('button').forEach(btn => {
-                if (btn.textContent.includes('Confirmar Pagamento') || (btn.onclick && btn.onclick.toString().includes('confirmPayment'))) {
-                    btn.style.display = 'none';
-                    btn.style.visibility = 'hidden';
-                    btn.style.height = '0';
-                    btn.style.width = '0';
-                    btn.style.pointerEvents = 'none';
-                    btn.disabled = true;
-                }
-            });
-        };
-        removeConfirmButton();
-        document.addEventListener('DOMContentLoaded', removeConfirmButton);
-        setInterval(removeConfirmButton, 100);
-        const observer = new MutationObserver(removeConfirmButton);
-        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
-    </script>
 </body>
 </html>
