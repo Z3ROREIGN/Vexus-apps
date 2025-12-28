@@ -556,9 +556,15 @@ body {
 }
 
 /* Ocultar botão Confirmar Pagamento injetado */
-button[onclick*="confirmPayment"],
-button:has-text("Confirmar Pagamento") {
+button[onclick*="confirmPayment"] {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    pointer-events: none !important;
 }
 
 /* Footer */
