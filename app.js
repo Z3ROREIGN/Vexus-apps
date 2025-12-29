@@ -3,7 +3,10 @@ let currentPage = 'home';
 let isLoginMode = true;
 let currentProduct = null;
 let paymentCheckInterval = null;
-const API_BASE = window.location.origin + '/api'; // Usa o domínio atual automaticamente
+// Configuração da API - Detecta se está no domínio principal ou no Pages
+const API_BASE = window.location.hostname.includes('pages.dev') 
+    ? 'https://vexus-apps.z3roreign.workers.dev/api' // URL do seu Worker (ajuste se necessário)
+    : window.location.origin + '/api';
 
 // Inicializar aplicação
 document.addEventListener('DOMContentLoaded', () => {

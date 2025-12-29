@@ -20,15 +20,15 @@ const BITSO_API_BASE = 'https://api.bitso.com/v3';
  */
 export default {
     async fetch(request, env, ctx) {
+        const corsHeaders = {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        };
+
         // CORS headers
         if (request.method === 'OPTIONS') {
-            return new Response(null, {
-                headers: {
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-                    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-                }
-            });
+            return new Response(null, { headers: corsHeaders });
         }
 
         const url = new URL(request.url);
