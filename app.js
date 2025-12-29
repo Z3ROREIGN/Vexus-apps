@@ -12,20 +12,35 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Limpeza forçada de elementos legados (caso o HTML esteja em cache)
     const forceCleanup = () => {
-        const legacyBtn = document.querySelector('button[onclick*="confirmPayment"]');
-        if (legacyBtn) legacyBtn.remove();
+        // Seletores variados para garantir a remoção
+        const selectors = [
+            'button[onclick*="confirmPayment"]',
+            '#confirmPaymentBtn',
+            '.confirm-btn'
+        ];
+        
+        selectors.forEach(selector => {
+            document.querySelectorAll(selector).forEach(el => el.remove());
+        });
         
         // Remover qualquer botão que contenha o texto "Confirmar Pagamento"
         document.querySelectorAll('button').forEach(btn => {
-            if (btn.textContent.includes('Confirmar Pagamento')) {
+            if (btn.textContent.trim().toLowerCase().includes('confirmar pagamento')) {
                 btn.remove();
             }
         });
     };
     
+    // Executar várias vezes para garantir (devido a renderizações assíncronas)
     forceCleanup();
+    setTimeout(forceCleanup, 500);
+    setTimeout(forceCleanup, 1000);
+    setTimeout(forceCleanup, 2000);
+    
     // Monitorar mudanças no DOM para garantir que o botão não reapareça
-    const observer = new MutationObserver(forceCleanup);
+    const observer = new MutationObserver(() => {
+        forceCleanup();
+    });
     observer.observe(document.body, { childList: true, subtree: true });
 });
 
