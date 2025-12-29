@@ -70,7 +70,7 @@ async function createPayment(request, env) {
     // Validar variáveis de ambiente
     if (!env.BITSO_API_KEY) {
         console.error('BITSO_API_KEY não configurada');
-        return jsonResponse({ error: 'Configuração de pagamento não disponível' }, 500);
+        return jsonResponse({ error: 'Configuração de pagamento não disponível. BITSO_API_KEY ausente.' }, 500);
     }
 
     try {
@@ -98,7 +98,10 @@ async function createPayment(request, env) {
         if (!bitsoResponse.ok) {
             const errorData = await bitsoResponse.text();
             console.error('Erro Bitso:', errorData);
-            throw new Error('Erro ao gerar pagamento PIX. Verifique suas credenciais Bitso.');
+            let errorMessage = 'Erro ao gerar pagamento PIX.';
+            if (bitsoResponse.status === 401) errorMessage = 'Credenciais Bitso inválidas ou expiradas.';
+            if (bitsoResponse.status === 403) errorMessage = 'Sua conta Bitso não tem permissão para Payouts.';
+            throw new Error(errorMessage);
         }
 
         const bitsoData = await bitsoResponse.json();
@@ -323,7 +326,7 @@ async function getPurchases(request, env) {
         // Ordenar por data (mais recente primeiro)
         purchases.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        return jsonResponse({ purchases });
+        return jsonResponse({ success: true, purchases });
     } catch (error) {
         console.error('Erro ao obter compras:', error);
         return jsonResponse({ error: error.message }, 500);

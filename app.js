@@ -3,7 +3,7 @@ let currentPage = 'home';
 let isLoginMode = true;
 let currentProduct = null;
 let paymentCheckInterval = null;
-const API_BASE = 'https://vexusapps.shop/api'; // Será substituído pelo domínio real
+const API_BASE = window.location.origin + '/api'; // Usa o domínio atual automaticamente
 
 // Inicializar aplicação
 document.addEventListener('DOMContentLoaded', () => {
@@ -103,7 +103,8 @@ async function goToCheckout() {
         });
 
         if (!response.ok) {
-            throw new Error('Erro ao criar pagamento');
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Erro ao criar pagamento');
         }
 
         const data = await response.json();
