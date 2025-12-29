@@ -4,6 +4,52 @@ let isLoginMode = true;
 let currentProduct = null;
 let paymentCheckInterval = null;
 
+// Lista de Produtos (Recuperada do data.json)
+const products = [
+    {
+      "id": 1,
+      "name": "Ticket",
+      "price": 4.00,
+      "icon": "👥",
+      "description": "Bot para gerenciamento de tickets de suporte. Automatize o atendimento ao cliente com sistema de tickets inteligente.",
+      "features": [
+        "Criação automática de tickets",
+        "Categorização de problemas",
+        "Atribuição de staff",
+        "Histórico de conversas",
+        "Notificações em tempo real"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Vendas",
+      "price": 5.00,
+      "icon": "⚡",
+      "description": "Bot para automação de vendas e conversão. Aumente suas vendas com chatbot inteligente e integração de pagamentos.",
+      "features": [
+        "Chatbot de vendas",
+        "Integração de pagamentos",
+        "Cupons e promoções",
+        "Análise de conversão",
+        "Sugestões de produtos"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Manager",
+      "price": 8.00,
+      "icon": "⚙️",
+      "description": "Bot para gerenciamento completo do servidor. Controle total com moderação, logs e automações avançadas.",
+      "features": [
+        "Moderação automática",
+        "Sistema de logs",
+        "Gerenciamento de roles",
+        "Automação de eventos",
+        "Análise de servidor"
+      ]
+    }
+];
+
 // Forçar URL absoluta do Worker para garantir funcionamento em qualquer domínio
 const API_BASE = 'https://vexus-apps.z3roreign.workers.dev/api';
 
@@ -11,15 +57,6 @@ const API_BASE = 'https://vexus-apps.z3roreign.workers.dev/api';
 document.addEventListener('DOMContentLoaded', () => {
     renderProducts();
     updateUserDisplay();
-    
-    // Limpeza forçada de elementos legados
-    const forceCleanup = () => {
-        const selectors = ['button[onclick*="confirmPayment"]'];
-        selectors.forEach(sel => {
-            document.querySelectorAll(sel).forEach(el => el.remove());
-        });
-    };
-    forceCleanup();
 });
 
 // Renderizar produtos do catálogo
@@ -45,6 +82,7 @@ function showDetails(id) {
     
     currentProduct = product;
     const details = document.getElementById('productDetails');
+    const catalog = document.getElementById('catalog');
     
     details.innerHTML = `
         <div class="details-content">
@@ -67,7 +105,7 @@ function showDetails(id) {
         </div>
     `;
     
-    document.getElementById('catalog').classList.add('hidden');
+    catalog.classList.add('hidden');
     details.classList.remove('hidden');
     window.scrollTo(0, 0);
 }
@@ -89,9 +127,7 @@ async function startPurchase(productId) {
     }
 
     try {
-        // Mostrar loading
         const buyBtn = document.querySelector('.buy-btn');
-        const originalText = buyBtn.innerText;
         buyBtn.innerText = 'Processando...';
         buyBtn.disabled = true;
 
@@ -111,18 +147,17 @@ async function startPurchase(productId) {
         try {
             data = JSON.parse(responseText);
         } catch (e) {
-            throw new Error(`Erro do servidor (${response.status}): ${responseText || 'Resposta vazia'}`);
+            throw new Error(`Erro do servidor: ${responseText || 'Resposta vazia'}`);
         }
         
         if (!response.ok || data.error) {
-            throw new Error(data.error || `Erro ${response.status}`);
+            throw new Error(data.error || 'Erro ao criar pagamento');
         }
 
-        // Exibir checkout
         showCheckout(data);
     } catch (error) {
-        console.error('Erro ao criar pagamento:', error);
-        alert('Erro ao criar pagamento: ' + error.message);
+        console.error('Erro:', error);
+        alert(error.message);
     } finally {
         const buyBtn = document.querySelector('.buy-btn');
         if (buyBtn) {
@@ -132,7 +167,6 @@ async function startPurchase(productId) {
     }
 }
 
-// Exibir tela de checkout
 function showCheckout(paymentData) {
     const checkout = document.getElementById('checkout');
     const details = document.getElementById('productDetails');
@@ -143,37 +177,26 @@ function showCheckout(paymentData) {
     details.classList.add('hidden');
     checkout.classList.remove('hidden');
     
-    // Iniciar verificação automática
-    startPaymentCheck(paymentData.paymentId);
+    startPaymentCheck(paymentData.purchaseId);
 }
 
-// Verificar status do pagamento
-function startPaymentCheck(paymentId) {
+function startPaymentCheck(purchaseId) {
     if (paymentCheckInterval) clearInterval(paymentCheckInterval);
-    
     paymentCheckInterval = setInterval(async () => {
         try {
             const response = await fetch(`${API_BASE}/payment/check`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ paymentId })
+                body: JSON.stringify({ purchaseId })
             });
-            
             const data = await response.json();
-            
             if (data.status === 'paid' || data.status === 'completed') {
                 clearInterval(paymentCheckInterval);
-                showSuccess();
+                alert('Pagamento confirmado!');
+                location.reload();
             }
-        } catch (error) {
-            console.error('Erro ao verificar pagamento:', error);
-        }
+        } catch (e) {}
     }, 5000);
-}
-
-function showSuccess() {
-    alert('Pagamento confirmado com sucesso! Seu bot já está disponível em "Meus Comprados".');
-    location.reload();
 }
 
 function copyPix() {
@@ -183,10 +206,9 @@ function copyPix() {
     alert('Código PIX copiado!');
 }
 
-// Gerenciamento de Usuários (LocalStorage)
+// Autenticação e Usuários
 function getUsers() {
-    const users = localStorage.getItem('vexus_users');
-    return users ? JSON.parse(users) : [];
+    return JSON.parse(localStorage.getItem('vexus_users') || '[]');
 }
 
 function saveUsers(users) {
@@ -194,15 +216,13 @@ function saveUsers(users) {
 }
 
 function getCurrentUser() {
-    const user = localStorage.getItem('vexus_current_user');
-    return user ? JSON.parse(user) : null;
+    return JSON.parse(localStorage.getItem('vexus_current_user') || 'null');
 }
 
 function setCurrentUser(user) {
     localStorage.setItem('vexus_current_user', JSON.stringify(user));
 }
 
-// Autenticação
 function showAuthModal() {
     document.getElementById('authModal').classList.remove('hidden');
 }
@@ -213,73 +233,41 @@ function hideAuthModal() {
 
 function toggleAuthMode() {
     isLoginMode = !isLoginMode;
-    const title = document.getElementById('authTitle');
-    const btn = document.getElementById('authSubmitBtn');
-    const toggleText = document.getElementById('authToggleText');
-    
-    if (isLoginMode) {
-        title.innerText = 'Login';
-        btn.innerText = 'Entrar';
-        toggleText.innerHTML = 'Não tem conta? <a href="#" onclick="toggleAuthMode()">Registre-se</a>';
-    } else {
-        title.innerText = 'Registrar';
-        btn.innerText = 'Registrar';
-        toggleText.innerHTML = 'Já tem conta? <a href="#" onclick="toggleAuthMode()">Faça login</a>';
-    }
+    document.getElementById('authTitle').innerText = isLoginMode ? 'Login' : 'Registrar';
+    document.getElementById('authSubmitBtn').innerText = isLoginMode ? 'Entrar' : 'Registrar';
 }
 
 async function handleAuth() {
     const email = document.getElementById('authEmail').value;
     const password = document.getElementById('authPassword').value;
-    
-    if (!email || !password) {
-        alert('Preencha todos os campos');
-        return;
-    }
+    if (!email || !password) return alert('Preencha tudo');
 
     const users = getUsers();
-    
     if (isLoginMode) {
         const user = users.find(u => u.email === email && u.password === password);
         if (user) {
             setCurrentUser(user);
-            hideAuthModal();
-            updateUserDisplay();
-        } else {
-            alert('Email ou senha incorretos');
-        }
+            location.reload();
+        } else alert('Dados incorretos');
     } else {
-        if (users.find(u => u.email === email)) {
-            alert('Email já cadastrado');
-            return;
-        }
-        
+        if (users.find(u => u.email === email)) return alert('Email já existe');
         const newUser = { email, password, purchases: [] };
         users.push(newUser);
         saveUsers(users);
         setCurrentUser(newUser);
-        hideAuthModal();
-        updateUserDisplay();
+        location.reload();
     }
 }
 
 function updateUserDisplay() {
     const user = getCurrentUser();
     const authBtn = document.getElementById('authBtn');
-    const userEmailSpan = document.getElementById('userEmail');
-    
     if (user) {
         authBtn.innerText = 'Sair';
-        authBtn.onclick = logout;
-        if (userEmailSpan) userEmailSpan.innerText = user.email;
+        authBtn.onclick = () => { localStorage.removeItem('vexus_current_user'); location.reload(); };
+        document.getElementById('userEmail').innerText = user.email;
     } else {
         authBtn.innerText = 'Entrar';
         authBtn.onclick = showAuthModal;
-        if (userEmailSpan) userEmailSpan.innerText = '';
     }
-}
-
-function logout() {
-    localStorage.removeItem('vexus_current_user');
-    location.reload();
 }
