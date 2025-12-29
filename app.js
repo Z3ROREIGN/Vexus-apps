@@ -139,11 +139,22 @@ async function goToCheckout() {
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Erro ao criar pagamento');
+            const errorText = await response.text();
+            try {
+                const errorData = JSON.parse(errorText);
+                throw new Error(errorData.error || 'Erro ao criar pagamento');
+            } catch (e) {
+                throw new Error(errorText || 'Erro desconhecido ao criar pagamento');
+            }
         }
 
-        const data = await response.json();
+        const responseText = await response.text();
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            throw new Error('Resposta inválida do servidor: ' + responseText);
+        }
         
         // Salvar ID da compra
         localStorage.setItem('current_purchase_id', data.purchaseId);
@@ -389,6 +400,30 @@ function toggleAuth() {
         document.getElementById('authTitle').textContent = 'Login';
         showPage('auth');
     }
+}
+
+// Funções de gerenciamento de usuário (LocalStorage)
+function getUsers() {
+    return JSON.parse(localStorage.getItem('vexus_users') || '[]');
+}
+
+function saveUsers(users) {
+    localStorage.setItem('vexus_users', JSON.stringify(users));
+}
+
+function getCurrentUser() {
+    const userId = localStorage.getItem('vexus_current_user');
+    if (!userId) return null;
+    const users = getUsers();
+    return users.find(u => u.id === userId) || null;
+}
+
+function setCurrentUser(userId) {
+    localStorage.setItem('vexus_current_user', userId);
+}
+
+function clearCurrentUser() {
+    localStorage.removeItem('vexus_current_user');
 }
 
 // Atualizar exibição de usuário

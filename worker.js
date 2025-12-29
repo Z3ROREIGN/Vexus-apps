@@ -99,9 +99,21 @@ async function createPayment(request, env) {
             const errorData = await bitsoResponse.text();
             console.error('Erro Bitso:', errorData);
             let errorMessage = 'Erro ao gerar pagamento PIX.';
-            if (bitsoResponse.status === 401) errorMessage = 'Credenciais Bitso inválidas ou expiradas.';
+            if (bitsoResponse.status === 401) errorMessage = 'Credenciais Bitso inválidas ou expiradas (BITSO_API_KEY).';
             if (bitsoResponse.status === 403) errorMessage = 'Sua conta Bitso não tem permissão para Payouts.';
-            throw new Error(errorMessage);
+            
+            // Tentar extrair mensagem de erro do JSON da Bitso se disponível
+            try {
+                const bitsoError = JSON.parse(errorData);
+                if (bitsoError.error && bitsoError.error.message) {
+                    errorMessage += ' Detalhes: ' + bitsoError.error.message;
+                }
+            } catch (e) {}
+            
+            return jsonResponse({ 
+                error: errorMessage,
+                details: errorData
+            }, bitsoResponse.status);
         }
 
         const bitsoData = await bitsoResponse.json();
