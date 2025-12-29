@@ -32,20 +32,36 @@ export default {
         }
 
         const url = new URL(request.url);
-        const path = url.pathname;
+        let path = url.pathname;
+        
+        // Normalizar path para remover prefixo /api se presente (Cloudflare Pages Functions vs Workers)
+        if (path.startsWith('/api')) {
+            path = path.substring(4);
+        }
+        if (path === '') path = '/';
+        
+        console.log(`[DEBUG] Request Path: ${path}, Method: ${request.method}`);
+
+        // Endpoints normalizados (sem /api)
+        const ROUTES = {
+            CREATE_PAYMENT: '/payment/create',
+            CHECK_PAYMENT: '/payment/check',
+            ACTIVATE_BOT: '/bot/activate',
+            GET_PURCHASES: '/purchases'
+        };
 
         try {
             // Rotear requisições
-            if (path === ENDPOINTS.CREATE_PAYMENT && request.method === 'POST') {
+            if (path === ROUTES.CREATE_PAYMENT && request.method === 'POST') {
                 return await createPayment(request, env);
             }
-            if (path === ENDPOINTS.CHECK_PAYMENT && request.method === 'POST') {
+            if (path === ROUTES.CHECK_PAYMENT && request.method === 'POST') {
                 return await checkPayment(request, env);
             }
-            if (path === ENDPOINTS.ACTIVATE_BOT && request.method === 'POST') {
+            if (path === ROUTES.ACTIVATE_BOT && request.method === 'POST') {
                 return await activateBot(request, env);
             }
-            if (path === ENDPOINTS.GET_PURCHASES && request.method === 'GET') {
+            if (path === ROUTES.GET_PURCHASES && request.method === 'GET') {
                 return await getPurchases(request, env);
             }
 
