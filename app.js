@@ -9,6 +9,24 @@ const API_BASE = window.location.origin + '/api'; // Usa o domínio atual automa
 document.addEventListener('DOMContentLoaded', () => {
     renderProducts();
     updateUserDisplay();
+    
+    // Limpeza forçada de elementos legados (caso o HTML esteja em cache)
+    const forceCleanup = () => {
+        const legacyBtn = document.querySelector('button[onclick*="confirmPayment"]');
+        if (legacyBtn) legacyBtn.remove();
+        
+        // Remover qualquer botão que contenha o texto "Confirmar Pagamento"
+        document.querySelectorAll('button').forEach(btn => {
+            if (btn.textContent.includes('Confirmar Pagamento')) {
+                btn.remove();
+            }
+        });
+    };
+    
+    forceCleanup();
+    // Monitorar mudanças no DOM para garantir que o botão não reapareça
+    const observer = new MutationObserver(forceCleanup);
+    observer.observe(document.body, { childList: true, subtree: true });
 });
 
 // Navegação entre páginas
