@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 # KV Namespace para armazenar compras
 [[kv_namespaces]]
 binding = "PURCHASES"
-id = "seu-kv-namespace-id-aqui"
+id = "d99a6bb1b0ee4118bbf8a4e4f8d570ef"
 
 # Environment Variables - Configure no Cloudflare Dashboard
 [vars]
@@ -22,4 +22,4 @@ name = "vexus-apps-production"
 
 [[env.production.kv_namespaces]]
 binding = "PURCHASES"
-id = "seu-kv-namespace-id-aqui"
+id = "d99a6bb1b0ee4118bbf8a4e4f8d570ef"
