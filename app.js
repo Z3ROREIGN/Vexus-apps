@@ -4,52 +4,6 @@ let isLoginMode = true;
 let currentProduct = null;
 let paymentCheckInterval = null;
 
-// Lista de Produtos (Recuperada do data.json)
-const products = [
-    {
-      "id": 1,
-      "name": "Ticket",
-      "price": 4.00,
-      "icon": "👥",
-      "description": "Bot para gerenciamento de tickets de suporte. Automatize o atendimento ao cliente com sistema de tickets inteligente.",
-      "features": [
-        "Criação automática de tickets",
-        "Categorização de problemas",
-        "Atribuição de staff",
-        "Histórico de conversas",
-        "Notificações em tempo real"
-      ]
-    },
-    {
-      "id": 2,
-      "name": "Vendas",
-      "price": 5.00,
-      "icon": "⚡",
-      "description": "Bot para automação de vendas e conversão. Aumente suas vendas com chatbot inteligente e integração de pagamentos.",
-      "features": [
-        "Chatbot de vendas",
-        "Integração de pagamentos",
-        "Cupons e promoções",
-        "Análise de conversão",
-        "Sugestões de produtos"
-      ]
-    },
-    {
-      "id": 3,
-      "name": "Manager",
-      "price": 8.00,
-      "icon": "⚙️",
-      "description": "Bot para gerenciamento completo do servidor. Controle total com moderação, logs e automações avançadas.",
-      "features": [
-        "Moderação automática",
-        "Sistema de logs",
-        "Gerenciamento de roles",
-        "Automação de eventos",
-        "Análise de servidor"
-      ]
-    }
-];
-
 // Forçar URL absoluta do Worker para garantir funcionamento em qualquer domínio
 const API_BASE = 'https://vexus-apps.z3roreign.workers.dev/api';
 
@@ -57,77 +11,92 @@ const API_BASE = 'https://vexus-apps.z3roreign.workers.dev/api';
 document.addEventListener('DOMContentLoaded', () => {
     renderProducts();
     updateUserDisplay();
+    showPage('home');
 });
+
+// Navegação entre páginas
+function showPage(page) {
+    // Limpar intervalo de verificação se sair do checkout
+    if (currentPage === 'checkout' && page !== 'checkout') {
+        if (paymentCheckInterval) clearInterval(paymentCheckInterval);
+    }
+
+    // Ocultar todas as páginas
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    
+    // Mostrar página selecionada
+    const targetPage = document.getElementById(page);
+    if (targetPage) {
+        targetPage.classList.add('active');
+        currentPage = page;
+    }
+    
+    // Atualizar conteúdo específico
+    if (page === 'purchases') {
+        renderPurchases();
+    }
+    
+    window.scrollTo(0, 0);
+}
 
 // Renderizar produtos do catálogo
 function renderProducts() {
     const grid = document.getElementById('productsGrid');
     if (!grid) return;
     
-    grid.innerHTML = products.map(product => `
-        <div class="product-card">
+    grid.innerHTML = DATA.products.map(product => `
+        <div class="product-card" onclick="selectProduct(${product.id})">
             <div class="product-icon">${product.icon}</div>
             <h3>${product.name}</h3>
             <p>${product.description}</p>
-            <div class="price">R$ ${product.price.toFixed(2)}</div>
-            <button onclick="showDetails(${product.id})">Ver Detalhes</button>
+            <div class="product-price">R$ ${product.price.toFixed(2)}</div>
+            <button class="product-btn" onclick="event.stopPropagation(); selectProduct(${product.id})">Ver Detalhes</button>
         </div>
     `).join('');
 }
 
-// Mostrar detalhes do produto
-function showDetails(id) {
-    const product = products.find(p => p.id === id);
-    if (!product) return;
+// Selecionar produto
+function selectProduct(productId) {
+    const user = getCurrentUser();
+    if (!user) {
+        alert('Faça login para comprar');
+        showPage('auth');
+        return;
+    }
     
-    currentProduct = product;
-    const details = document.getElementById('productDetails');
-    const catalog = document.getElementById('catalog');
-    
-    details.innerHTML = `
-        <div class="details-content">
-            <button class="back-btn" onclick="hideDetails()">← Voltar</button>
-            <div class="product-header">
-                <div class="product-icon-large">${product.icon}</div>
-                <h2>${product.name}</h2>
-            </div>
-            <p class="product-desc-large">${product.description}</p>
-            <div class="price-large">R$ ${product.price.toFixed(2)}</div>
-            
-            <div class="features-list">
-                <h3>Recursos:</h3>
-                <ul>
-                    ${product.features.map(f => `<li>✓ ${f}</li>`).join('')}
-                </ul>
-            </div>
-            
-            <button class="buy-btn" onclick="startPurchase(${product.id})">Comprar Agora</button>
-        </div>
-    `;
-    
-    catalog.classList.add('hidden');
-    details.classList.remove('hidden');
-    window.scrollTo(0, 0);
+    currentProduct = DATA.products.find(p => p.id === productId);
+    renderProductDetail();
+    showPage('product-detail');
 }
 
-function hideDetails() {
-    document.getElementById('productDetails').classList.add('hidden');
-    document.getElementById('catalog').classList.remove('hidden');
-    currentProduct = null;
+// Renderizar detalhes do produto
+function renderProductDetail() {
+    if (!currentProduct) return;
+    
+    const detail = document.getElementById('productDetail');
+    detail.innerHTML = `
+        <div style="text-align: center; margin-bottom: 2rem;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">${currentProduct.icon}</div>
+            <h2>${currentProduct.name}</h2>
+        </div>
+        <p>${currentProduct.description}</p>
+        <div class="product-detail-price">R$ ${currentProduct.price.toFixed(2)}</div>
+        <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Recursos:</h3>
+        <ul style="margin-bottom: 2rem; color: var(--text-secondary);">
+            ${currentProduct.features.map(f => `<li style="margin-bottom: 0.5rem;">✓ ${f}</li>`).join('')}
+        </ul>
+        <button class="buy-btn" onclick="startPurchase()">Comprar Agora</button>
+    `;
 }
 
 // Iniciar processo de compra
-async function startPurchase(productId) {
-    const product = products.find(p => p.id === productId);
+async function startPurchase() {
+    if (!currentProduct) return;
     const user = getCurrentUser();
     
-    if (!user) {
-        showAuthModal();
-        return;
-    }
-
     try {
         const buyBtn = document.querySelector('.buy-btn');
+        const originalText = buyBtn.innerText;
         buyBtn.innerText = 'Processando...';
         buyBtn.disabled = true;
 
@@ -135,10 +104,10 @@ async function startPurchase(productId) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                amount: product.price,
+                amount: currentProduct.price,
                 email: user.email,
-                productId: product.id,
-                productName: product.name
+                productId: currentProduct.id,
+                productName: currentProduct.name
             })
         });
 
@@ -168,15 +137,14 @@ async function startPurchase(productId) {
 }
 
 function showCheckout(paymentData) {
-    const checkout = document.getElementById('checkout');
-    const details = document.getElementById('productDetails');
-    
+    document.getElementById('checkoutProduct').innerText = currentProduct.name;
+    document.getElementById('checkoutPrice').innerText = `R$ ${currentProduct.price.toFixed(2)}`;
     document.getElementById('pixCode').value = paymentData.pixCode;
-    document.getElementById('qrCodeImg').src = paymentData.qrCode;
     
-    details.classList.add('hidden');
-    checkout.classList.remove('hidden');
+    const qrCodeContainer = document.getElementById('qrCode');
+    qrCodeContainer.innerHTML = `<img src="${paymentData.qrCode}" alt="QR Code Pix" style="max-width: 250px; margin: 0 auto; display: block; border-radius: 10px;">`;
     
+    showPage('checkout');
     startPaymentCheck(paymentData.purchaseId);
 }
 
@@ -193,81 +161,162 @@ function startPaymentCheck(purchaseId) {
             if (data.status === 'paid' || data.status === 'completed') {
                 clearInterval(paymentCheckInterval);
                 alert('Pagamento confirmado!');
-                location.reload();
+                
+                // Adicionar aos comprados localmente para exibição imediata
+                const purchases = getPurchases();
+                purchases.push({
+                    id: purchaseId,
+                    productId: currentProduct.id,
+                    productName: currentProduct.name,
+                    date: new Date().toLocaleDateString(),
+                    status: 'Ativo'
+                });
+                savePurchases(purchases);
+                
+                showPage('purchases');
             }
         } catch (e) {}
     }, 5000);
 }
 
-function copyPix() {
+function copyPixCode() {
     const pixCode = document.getElementById('pixCode');
     pixCode.select();
     document.execCommand('copy');
     alert('Código PIX copiado!');
 }
 
-// Autenticação e Usuários
-function getUsers() {
-    return JSON.parse(localStorage.getItem('vexus_users') || '[]');
-}
-
-function saveUsers(users) {
-    localStorage.setItem('vexus_users', JSON.stringify(users));
-}
-
-function getCurrentUser() {
-    return JSON.parse(localStorage.getItem('vexus_current_user') || 'null');
-}
-
-function setCurrentUser(user) {
-    localStorage.setItem('vexus_current_user', JSON.stringify(user));
-}
-
-function showAuthModal() {
-    document.getElementById('authModal').classList.remove('hidden');
-}
-
-function hideAuthModal() {
-    document.getElementById('authModal').classList.add('hidden');
+// Autenticação
+function toggleAuth() {
+    const user = getCurrentUser();
+    if (user) {
+        clearCurrentUser();
+        location.reload();
+    } else {
+        showPage('auth');
+    }
 }
 
 function toggleAuthMode() {
     isLoginMode = !isLoginMode;
     document.getElementById('authTitle').innerText = isLoginMode ? 'Login' : 'Registrar';
-    document.getElementById('authSubmitBtn').innerText = isLoginMode ? 'Entrar' : 'Registrar';
+    document.querySelector('#authForm button').innerText = isLoginMode ? 'Entrar' : 'Registrar';
+    document.querySelector('.auth-toggle').innerHTML = isLoginMode ? 
+        'Não tem conta? <a href="#" onclick="toggleAuthMode()">Registre-se</a>' : 
+        'Já tem conta? <a href="#" onclick="toggleAuthMode()">Faça Login</a>';
 }
 
-async function handleAuth() {
+async function handleAuth(event) {
+    event.preventDefault();
     const email = document.getElementById('authEmail').value;
     const password = document.getElementById('authPassword').value;
-    if (!email || !password) return alert('Preencha tudo');
-
+    
     const users = getUsers();
     if (isLoginMode) {
         const user = users.find(u => u.email === email && u.password === password);
         if (user) {
-            setCurrentUser(user);
+            setCurrentUser(user.id);
             location.reload();
-        } else alert('Dados incorretos');
+        } else {
+            alert('Email ou senha incorretos');
+        }
     } else {
-        if (users.find(u => u.email === email)) return alert('Email já existe');
-        const newUser = { email, password, purchases: [] };
+        if (users.find(u => u.email === email)) {
+            alert('Este email já está cadastrado');
+            return;
+        }
+        const newUser = {
+            id: 'user-' + Date.now(),
+            email,
+            password,
+            createdAt: new Date().toISOString()
+        };
         users.push(newUser);
         saveUsers(users);
-        setCurrentUser(newUser);
+        setCurrentUser(newUser.id);
         location.reload();
     }
 }
 
 function updateUserDisplay() {
     const user = getCurrentUser();
+    const userDisplay = document.getElementById('userDisplay');
     const authBtn = document.getElementById('authBtn');
+    
     if (user) {
+        userDisplay.innerText = user.email;
         authBtn.innerText = 'Sair';
-        authBtn.onclick = () => { localStorage.removeItem('vexus_current_user'); location.reload(); };
-        document.getElementById('userEmail').innerText = user.email;
     } else {
+        userDisplay.innerText = 'Visitante';
         authBtn.innerText = 'Entrar';
-        authBtn.onclick = showAuthModal;
+    }
+}
+
+// Meus Comprados
+function renderPurchases() {
+    const list = document.getElementById('purchasesList');
+    const purchases = getPurchases();
+    const user = getCurrentUser();
+    
+    if (!user) {
+        list.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Faça login para ver suas compras.</p>';
+        return;
+    }
+
+    if (purchases.length === 0) {
+        list.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Você ainda não possui bots comprados.</p>';
+        return;
+    }
+
+    list.innerHTML = purchases.map(p => `
+        <div class="purchase-card">
+            <div class="purchase-info">
+                <h3>${p.productName}</h3>
+                <p>Comprado em: ${p.date}</p>
+                <span class="status-badge">${p.status}</span>
+            </div>
+            <button class="activate-btn" onclick="goToActivation('${p.productId}')">Ativar Bot</button>
+        </div>
+    `).join('');
+}
+
+function goToActivation(productId) {
+    document.getElementById('activationProductId').value = productId;
+    showPage('activation');
+}
+
+async function handleActivation(event) {
+    event.preventDefault();
+    const productId = document.getElementById('activationProductId').value;
+    const botToken = document.getElementById('botToken').value;
+    const user = getCurrentUser();
+
+    try {
+        const submitBtn = event.target.querySelector('button');
+        submitBtn.innerText = 'Processando...';
+        submitBtn.disabled = true;
+
+        const response = await fetch(`${API_BASE}/activate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                productId,
+                botToken,
+                userEmail: user.email
+            })
+        });
+
+        if (response.ok) {
+            alert('Solicitação de ativação enviada com sucesso! Verifique seu Discord.');
+            showPage('purchases');
+        } else {
+            alert('Erro ao enviar ativação. Tente novamente.');
+        }
+    } catch (e) {
+        alert('Erro de conexão.');
+    } finally {
+        const submitBtn = event.target.querySelector('button');
+        submitBtn.innerText = 'Confirmar Ativação';
+        submitBtn.disabled = false;
     }
 }
