@@ -133,7 +133,7 @@ async function goToCheckout() {
 
 // Iniciar verificação automática de pagamento
 function startPaymentCheck() {
-    // Verificar a cada 5 segundos
+    // Verificar a cada 3 segundos para uma experiência mais rápida
     paymentCheckInterval = setInterval(async () => {
         const purchaseId = localStorage.getItem('current_purchase_id');
         if (!purchaseId) return;
@@ -172,7 +172,7 @@ function startPaymentCheck() {
         } catch (error) {
             console.error('Erro ao verificar pagamento:', error);
         }
-    }, 5000);
+    }, 3000);
 }
 
 // Gerar QR Code

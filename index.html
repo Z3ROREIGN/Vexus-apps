@@ -5,50 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vexus Apps - Plataforma de Bots Discord</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        button[onclick*="confirmPayment"] { display: none !important; }
-    </style>
-    <script>
-        (function() {
-            const hideConfirmBtn = () => {
-                const buttons = document.querySelectorAll('button');
-                buttons.forEach(btn => {
-                    if (btn.textContent.trim() === 'Confirmar Pagamento' || btn.onclick?.toString().includes('confirmPayment')) {
-                        btn.parentNode.removeChild(btn);
-                    }
-                });
-            };
-            
-            // Executar imediatamente
-            hideConfirmBtn();
-            
-            // Usar MutationObserver para monitorar mudanças
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    if (mutation.addedNodes.length) {
-                        hideConfirmBtn();
-                    }
-                });
-            });
-            
-            // Aguardar o DOM estar pronto
-            if (document.body) {
-                observer.observe(document.body, {
-                    childList: true,
-                    subtree: true,
-                    attributes: false,
-                    characterData: false
-                });
-            } else {
-                document.addEventListener('DOMContentLoaded', () => {
-                    observer.observe(document.body, {
-                        childList: true,
-                        subtree: true
-                    });
-                });
-            }
-        })();
-    </script>
 </head>
 <body>
     <!-- Header -->
@@ -143,7 +99,7 @@
                             <div id="qrCode"></div>
                         </div>
                         <div id="paymentStatus" style="text-align: center; margin-top: 2rem;">
-                            <p style="color: var(--text-secondary);">Aguardando pagamento...</p>
+                            <p style="color: var(--text-secondary);">Aguardando pagamento automático...</p>
                             <div style="margin-top: 1rem;">
                                 <div style="display: inline-block; width: 20px; height: 20px; border: 3px solid var(--primary); border-radius: 50%; border-top-color: transparent; animation: spin 1s linear infinite;"></div>
                             </div>

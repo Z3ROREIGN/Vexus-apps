@@ -106,10 +106,14 @@ async function createPayment(request, env) {
 
         const bitsoData = await bitsoResponse.json();
 
-        // Extrair dados do PIX
-        const pixCode = bitsoData.payout_request?.qr_code || bitsoData.qr_code || generateMockPixCode(amount);
+        // Extrair dados do PIX (Apenas da API Bitso)
+        const pixCode = bitsoData.payout_request?.qr_code || bitsoData.qr_code;
         const qrCodeUrl = bitsoData.payout_request?.qr_code_url || bitsoData.qr_code_url || null;
-        const bitsoId = bitsoData.payout_request?.id || bitsoData.id || reference;
+        const bitsoId = bitsoData.payout_request?.id || bitsoData.id;
+
+        if (!pixCode) {
+            throw new Error('A API Bitso não retornou um código PIX válido.');
+        }
 
         // Salvar compra em KV
         const purchase = {
