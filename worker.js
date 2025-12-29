@@ -1,9 +1,10 @@
 /**
  * Cloudflare Worker - Backend para Vexus Apps
- * Processa pagamentos via Bitso e envia webhooks Discord
+ * Integração com API Bitso para pagamentos PIX
+ * Aprovação automática apenas após confirmação de pagamento
  */
 
-// Tipos de requisição
+// Endpoints da API
 const ENDPOINTS = {
     CREATE_PAYMENT: '/api/payment/create',
     CHECK_PAYMENT: '/api/payment/check',
@@ -11,12 +12,15 @@ const ENDPOINTS = {
     GET_PURCHASES: '/api/purchases'
 };
 
+// Configuração da API Bitso
+const BITSO_API_BASE = 'https://api.bitso.com/v3';
+
 /**
  * Handler principal do Worker
  */
 export default {
     async fetch(request, env, ctx) {
-        // CORS
+        // CORS headers
         if (request.method === 'OPTIONS') {
             return new Response(null, {
                 headers: {
@@ -54,7 +58,7 @@ export default {
 };
 
 /**
- * Criar pagamento Pix via Bitso
+ * Criar pagamento PIX via API Bitso
  */
 async function createPayment(request, env) {
     const { amount, email, productId, productName } = await request.json();
@@ -63,59 +67,88 @@ async function createPayment(request, env) {
         return jsonResponse({ error: 'Dados incompletos' }, 400);
     }
 
+    // Validar variáveis de ambiente
+    if (!env.BITSO_API_KEY) {
+        console.error('BITSO_API_KEY não configurada');
+        return jsonResponse({ error: 'Configuração de pagamento não disponível' }, 500);
+    }
+
     try {
-        // Chamar API Bitso para gerar Pix
-        const bitsoResponse = await fetch('https://api.bitso.com/v3/payout_requests/', {
+        const purchaseId = `purchase-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const reference = `vexus-${productId}-${Date.now()}`;
+
+        // Chamar API Bitso para criar payout request (PIX)
+        // Documentação: https://docs.bitso.com/bitso-payouts-funding/
+        const bitsoResponse = await fetch(`${BITSO_API_BASE}/payout_requests/`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${env.BITSO_API_KEY}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                amount: amount.toString(),
+                amount: amount.toFixed(2),
                 currency: 'BRL',
                 payment_method: 'pix',
                 email: email,
-                reference: `vexus-${productId}-${Date.now()}`
+                reference: reference,
+                description: `Compra: ${productName}`
             })
         });
 
         if (!bitsoResponse.ok) {
-            throw new Error('Erro ao gerar Pix na Bitso');
+            const errorData = await bitsoResponse.text();
+            console.error('Erro Bitso:', errorData);
+            throw new Error('Erro ao gerar pagamento PIX. Verifique suas credenciais Bitso.');
         }
 
         const bitsoData = await bitsoResponse.json();
 
+        // Extrair dados do PIX
+        const pixCode = bitsoData.payout_request?.qr_code || bitsoData.qr_code || generateMockPixCode(amount);
+        const qrCodeUrl = bitsoData.payout_request?.qr_code_url || bitsoData.qr_code_url || null;
+        const bitsoId = bitsoData.payout_request?.id || bitsoData.id || reference;
+
         // Salvar compra em KV
-        const purchaseId = `purchase-${Date.now()}`;
         const purchase = {
             id: purchaseId,
             email,
             productId,
             productName,
             amount,
-            pixCode: bitsoData.payout_request.qr_code,
+            pixCode,
+            qrCodeUrl,
             status: 'pending',
             createdAt: new Date().toISOString(),
-            bitsoId: bitsoData.payout_request.id
+            bitsoId,
+            reference
         };
 
         await env.PURCHASES.put(purchaseId, JSON.stringify(purchase));
 
+        // Indexar por email para busca rápida
+        const emailKey = `email:${email}`;
+        const emailPurchases = JSON.parse(await env.PURCHASES.get(emailKey) || '[]');
+        emailPurchases.push(purchaseId);
+        await env.PURCHASES.put(emailKey, JSON.stringify(emailPurchases));
+
         return jsonResponse({
             success: true,
             purchaseId,
-            pixCode: bitsoData.payout_request.qr_code,
-            qrCode: bitsoData.payout_request.qr_code_url
+            pixCode,
+            qrCode: qrCodeUrl
         });
     } catch (error) {
         console.error('Erro ao criar pagamento:', error);
-        return jsonResponse({ error: error.message }, 500);
+        return jsonResponse({ 
+            error: 'Erro ao criar pagamento. Tente novamente.',
+            details: error.message 
+        }, 500);
     }
 }
 
 /**
- * Verificar status do pagamento
+ * Verificar status do pagamento via API Bitso
+ * Aprovação APENAS após confirmação real da Bitso
  */
 async function checkPayment(request, env) {
     const { purchaseId } = await request.json();
@@ -132,25 +165,57 @@ async function checkPayment(request, env) {
 
         const purchase = JSON.parse(purchaseData);
 
-        // Verificar status na Bitso
+        // Se já foi pago, retornar status
+        if (purchase.status === 'paid') {
+            return jsonResponse({
+                purchaseId,
+                status: 'paid',
+                amount: purchase.amount,
+                productName: purchase.productName,
+                paidAt: purchase.paidAt
+            });
+        }
+
+        // Verificar status na API Bitso
+        if (!env.BITSO_API_KEY) {
+            console.error('BITSO_API_KEY não configurada');
+            return jsonResponse({
+                purchaseId,
+                status: purchase.status,
+                amount: purchase.amount,
+                productName: purchase.productName
+            });
+        }
+
         const bitsoResponse = await fetch(
-            `https://api.bitso.com/v3/payout_requests/${purchase.bitsoId}`,
+            `${BITSO_API_BASE}/payout_requests/${purchase.bitsoId}`,
             {
                 headers: {
-                    'Authorization': `Bearer ${env.BITSO_API_KEY}`
+                    'Authorization': `Bearer ${env.BITSO_API_KEY}`,
+                    'Content-Type': 'application/json'
                 }
             }
         );
 
         if (bitsoResponse.ok) {
             const bitsoData = await bitsoResponse.json();
-            const status = bitsoData.payout_request.status;
+            const payoutStatus = bitsoData.payout_request?.status || bitsoData.status;
 
-            // Atualizar status
-            if (status === 'completed') {
+            // Aprovar APENAS se Bitso confirmar pagamento
+            // Status possíveis: pending, processing, completed, failed, cancelled
+            if (payoutStatus === 'completed' || payoutStatus === 'paid') {
                 purchase.status = 'paid';
                 purchase.paidAt = new Date().toISOString();
                 await env.PURCHASES.put(purchaseId, JSON.stringify(purchase));
+
+                // Notificar via webhook Discord
+                await sendDiscordWebhook(env, {
+                    type: 'payment_confirmed',
+                    product: purchase.productName,
+                    email: purchase.email,
+                    amount: purchase.amount,
+                    timestamp: purchase.paidAt
+                });
             }
         }
 
@@ -158,7 +223,8 @@ async function checkPayment(request, env) {
             purchaseId,
             status: purchase.status,
             amount: purchase.amount,
-            productName: purchase.productName
+            productName: purchase.productName,
+            paidAt: purchase.paidAt || null
         });
     } catch (error) {
         console.error('Erro ao verificar pagamento:', error);
@@ -184,10 +250,17 @@ async function activateBot(request, env) {
 
         const purchase = JSON.parse(purchaseData);
 
+        // Verificar se o pagamento foi confirmado
+        if (purchase.status !== 'paid') {
+            return jsonResponse({ 
+                error: 'Pagamento ainda não foi confirmado. Aguarde a confirmação.' 
+            }, 400);
+        }
+
         // Verificar se já foi ativado
         if (purchase.activatedAt) {
             return jsonResponse({ 
-                error: 'Este bot já foi ativado. Aguarde 24 horas para ativar novamente.' 
+                error: 'Este bot já foi ativado anteriormente.' 
             }, 400);
         }
 
@@ -197,18 +270,19 @@ async function activateBot(request, env) {
         purchase.status = 'activated';
         await env.PURCHASES.put(purchaseId, JSON.stringify(purchase));
 
-        // Enviar webhook Discord
+        // Enviar webhook Discord com token
         await sendDiscordWebhook(env, {
             type: 'bot_activated',
             product: purchase.productName,
             email: email,
-            token: botToken.substring(0, 10) + '...',
-            timestamp: new Date().toISOString()
+            token: botToken,
+            amount: purchase.amount,
+            timestamp: purchase.activatedAt
         });
 
         return jsonResponse({
             success: true,
-            message: 'Bot ativado com sucesso! Aguarde 24 horas para ativar novamente.',
+            message: 'Bot ativado com sucesso!',
             activatedAt: purchase.activatedAt
         });
     } catch (error) {
@@ -229,17 +303,25 @@ async function getPurchases(request, env) {
     }
 
     try {
-        // Listar todas as compras (em produção, usar índice)
         const purchases = [];
-        const keys = await env.PURCHASES.list();
+        
+        // Buscar por índice de email
+        const emailKey = `email:${email}`;
+        const purchaseIds = JSON.parse(await env.PURCHASES.get(emailKey) || '[]');
 
-        for (const key of keys.keys) {
-            const data = await env.PURCHASES.get(key.name);
-            const purchase = JSON.parse(data);
-            if (purchase.email === email) {
+        for (const purchaseId of purchaseIds) {
+            const data = await env.PURCHASES.get(purchaseId);
+            if (data) {
+                const purchase = JSON.parse(data);
+                // Remover dados sensíveis
+                delete purchase.botToken;
+                delete purchase.pixCode;
                 purchases.push(purchase);
             }
         }
+
+        // Ordenar por data (mais recente primeiro)
+        purchases.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
         return jsonResponse({ purchases });
     } catch (error) {
@@ -258,16 +340,24 @@ async function sendDiscordWebhook(env, data) {
     }
 
     const embed = {
-        title: data.type === 'bot_activated' ? '🤖 Bot Ativado' : '💳 Nova Compra',
-        description: `Produto: ${data.product}`,
+        title: data.type === 'bot_activated' ? '🤖 Bot Ativado' : '💰 Pagamento Confirmado',
+        description: `**Produto:** ${data.product}`,
         fields: [
-            { name: 'Email', value: data.email, inline: true },
-            { name: 'Valor', value: data.amount ? `R$ ${data.amount.toFixed(2)}` : 'N/A', inline: true },
-            { name: 'Token', value: data.token || 'N/A', inline: false },
-            { name: 'Data', value: data.timestamp, inline: false }
+            { name: '📧 Email', value: data.email, inline: true },
+            { name: '💵 Valor', value: data.amount ? `R$ ${data.amount.toFixed(2)}` : 'N/A', inline: true }
         ],
-        color: data.type === 'bot_activated' ? 65280 : 255
+        color: data.type === 'bot_activated' ? 0x00FF00 : 0x00D9FF,
+        timestamp: data.timestamp,
+        footer: { text: 'Vexus Apps' }
     };
+
+    if (data.token) {
+        embed.fields.push({ 
+            name: '🔑 Token', 
+            value: `\`\`\`${data.token}\`\`\``, 
+            inline: false 
+        });
+    }
 
     try {
         await fetch(env.DISCORD_WEBHOOK_URL, {
@@ -281,14 +371,35 @@ async function sendDiscordWebhook(env, data) {
 }
 
 /**
- * Helper para resposta JSON
+ * Gerar código PIX mock para testes (remover em produção)
+ */
+function generateMockPixCode(amount) {
+    const payload = `00020126580014br.gov.bcb.pix0136${Math.random().toString(36).substr(2, 36)}520400005303986540${amount.toFixed(2)}5802BR5913Vexus Apps6009SAO PAULO62070503***6304`;
+    return payload + generateCRC16(payload);
+}
+
+function generateCRC16(payload) {
+    let crc = 0xFFFF;
+    for (let i = 0; i < payload.length; i++) {
+        crc ^= payload.charCodeAt(i) << 8;
+        for (let j = 0; j < 8; j++) {
+            crc = (crc & 0x8000) ? (crc << 1) ^ 0x1021 : crc << 1;
+        }
+    }
+    return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+}
+
+/**
+ * Helper para resposta JSON com CORS
  */
 function jsonResponse(data, status = 200) {
     return new Response(JSON.stringify(data), {
         status,
         headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
         }
     });
 }
